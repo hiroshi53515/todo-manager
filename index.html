@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>タスク・進捗管理</title>
+<style>
+  :root {
+    --primary: #2563eb;
+    --primary-hover: #1d4ed8;
+    --danger: #dc2626;
+    --danger-hover: #b91c1c;
+    --success: #16a34a;
+    --warning: #f59e0b;
+    --bg: #f8fafc;
+    --card: #ffffff;
+    --border: #e2e8f0;
+    --text: #1e293b;
+    --text-light: #64748b;
+    --shadow: 0 1px 3px rgba(0,0,0,0.1);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', 'Meiryo', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: 20px;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+  h1 {
+    text-align: center;
+    margin-bottom: 8px;
+    font-size: 1.6rem;
+    color: var(--primary);
+  }
+  .header-stats {
+    text-align: center;
+    color: var(--text-light);
+    font-size: 0.85rem;
+    margin-bottom: 20px;
+  }
+  .header-stats span { margin: 0 8px; }
+  .header-stats .count { font-weight: 700; color: var(--text); }
+
+  /* フィルター・追加バー */
+  .toolbar {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .toolbar input[type="text"] {
+    flex: 1;
+    min-width: 200px;
+    padding: 10px 14px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 0.95rem;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .toolbar input[type="text"]:focus { border-color: var(--primary); }
+  .toolbar select {
+    padding: 10px 14px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 0.95rem;
+    background: var(--card);
+    cursor: pointer;
+  }
+  .btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    cursor: pointer;
+    font-weight: 600;
+    transition: background 0.2s, transform 0.1s;
+    white-space: nowrap;
+  }
+  .btn:active { transform: scale(0.97); }
+  .btn-primary { background: var(--primary); color: #fff; }
+  .btn-primary:hover { background: var(--primary-hover); }
+  .btn-danger { background: var(--danger); color: #fff; }
+  .btn-danger:hover { background: var(--danger-hover); }
+  .btn-sm {
+    padding: 5px 12px;
+    font-size: 0.8rem;
+  }
+  .btn-outline {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-light);
+  }
+  .btn-outline:hover { background: #f1f5f9; }
+
+  /* タスクカード */
+  .task-list { display: flex; flex-direction: column; gap: 12px; }
+  .task-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 20px;
+    box-shadow: var(--shadow);
+    transition: box-shadow 0.2s;
+    border-left: 4px solid var(--primary);
+  }
+  .task-card.completed { border-left-color: var(--success); opacity: 0.75; }
+  .task-card.completed .task-title { text-decoration: line-through; color: var(--text-light); }
+
+  .task-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+  .task-title-area { flex: 1; }
+  .task-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .task-title:hover { color: var(--primary); }
+  .task-meta {
+    font-size: 0.8rem;
+    color: var(--text-light);
+    margin-top: 2px;
+  }
+  .task-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+  /* 期限 */
+  .due-date { font-size: 0.8rem; margin-left: 8px; }
+  .due-date.overdue { color: var(--danger); font-weight: 700; }
+  .due-date.soon { color: var(--warning); font-weight: 600; }
+
+  /* 優先度バッジ */
+  .priority-badge {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 10px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    margin-right: 6px;
+  }
+  .priority-high { background: #fef2f2; color: var(--danger); }
+  .priority-medium { background: #fffbeb; color: #b45309; }
+  .priority-low { background: #f0fdf4; color: var(--success); }
+
+  /* 進捗バー */
+  .progress-section { margin: 10px 0; }
+  .progress-bar-bg {
+    width: 100%;
+    height: 8px;
+    background: #e2e8f0;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .progress-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.3s;
+    background: var(--primary);
+  }
+  .progress-bar-fill.high { background: var(--success); }
+  .progress-bar-fill.mid { background: var(--warning); }
+  .progress-text {
+    font-size: 0.8rem;
+    color: var(--text-light);
+    text-align: right;
+    margin-top: 2px;
+  }
+
+  /* サブタスク */
+  .subtasks { margin-top: 10px; }
+  .subtask-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0;
+    border-bottom: 1px solid #f1f5f9;
+    font-size: 0.9rem;
+  }
+  .subtask-item:last-child { border-bottom: none; }
+  .subtask-item input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--primary);
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .subtask-item.done span { text-decoration: line-through; color: var(--text-light); }
+  .subtask-text { flex: 1; }
+  .subtask-delete {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #cbd5e1;
+    font-size: 1.1rem;
+    padding: 0 4px;
+    transition: color 0.2s;
+  }
+  .subtask-delete:hover { color: var(--danger); }
+
+  .add-subtask-row {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+  }
+  .add-subtask-row input {
+    flex: 1;
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 0.85rem;
+    outline: none;
+  }
+  .add-subtask-row input:focus { border-color: var(--primary); }
+
+  /* 進捗メモ */
+  .progress-notes { margin-top: 10px; }
+  .progress-notes h4 { font-size: 0.85rem; color: var(--text-light); margin-bottom: 6px; }
+  .note-item {
+    background: #f8fafc;
+    border-left: 3px solid var(--primary);
+    padding: 8px 12px;
+    margin-bottom: 6px;
+    border-radius: 0 6px 6px 0;
+    font-size: 0.85rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .note-item .note-content { flex: 1; }
+  .note-item .note-date { font-size: 0.75rem; color: var(--text-light); white-space: nowrap; }
+  .note-item .note-delete {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #cbd5e1;
+    font-size: 0.9rem;
+    padding: 0;
+    transition: color 0.2s;
+  }
+  .note-item .note-delete:hover { color: var(--danger); }
+  .add-note-row {
+    display: flex;
+    gap: 6px;
+    margin-top: 6px;
+  }
+  .add-note-row input {
+    flex: 1;
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 0.85rem;
+    outline: none;
+  }
+  .add-note-row input:focus { border-color: var(--primary); }
+
+  /* モーダル */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 100;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+  }
+  .modal-overlay.active { display: flex; }
+  .modal {
+    background: var(--card);
+    border-radius: 16px;
+    padding: 28px;
+    width: 100%;
+    max-width: 500px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+    max-height: 80vh;
+    overflow-y: auto;
+  }
+  .modal h2 { margin-bottom: 20px; font-size: 1.2rem; }
+  .form-group { margin-bottom: 14px; }
+  .form-group label {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 4px;
+    color: var(--text-light);
+  }
+  .form-group input, .form-group select, .form-group textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 0.95rem;
+    outline: none;
+    font-family: inherit;
+  }
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+    border-color: var(--primary);
+  }
+  .form-group textarea { resize: vertical; min-height: 60px; }
+  .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+
+  /* 空状態 */
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-light);
+  }
+  .empty-state .icon { font-size: 3rem; margin-bottom: 10px; }
+  .empty-state p { font-size: 1rem; }
+
+  /* レスポンシブ */
+  @media (max-width: 600px) {
+    body { padding: 12px; }
+    .toolbar { flex-direction: column; }
+    .toolbar input[type="text"], .toolbar select { min-width: auto; }
+    .task-header { flex-direction: column; }
+    .task-actions { align-self: flex-end; }
+    .modal { padding: 20px; }
+  }
+</style>
+</head>
+<body>
+
+<h1>タスク・進捗管理</h1>
+<div class="header-stats" id="headerStats"></div>
+
+<div class="toolbar">
+  <input type="text" id="searchInput" placeholder="タスクを検索...">
+  <select id="filterStatus">
+    <option value="all">すべて</option>
+    <option value="active">進行中</option>
+    <option value="completed">完了</option>
+  </select>
+  <select id="filterPriority">
+    <option value="all">優先度：すべて</option>
+    <option value="high">高</option>
+    <option value="medium">中</option>
+    <option value="low">低</option>
+  </select>
+  <button class="btn btn-primary" onclick="openAddModal()">＋ 新規タスク</button>
+</div>
+
+<div class="task-list" id="taskList"></div>
+
+<!-- 新規タスク追加モーダル -->
+<div class="modal-overlay" id="addModal">
+  <div class="modal">
+    <h2 id="modalTitle">新規タスク</h2>
+    <div class="form-group">
+      <label>タスク名 *</label>
+      <input type="text" id="taskName" placeholder="例：○○現場の書類準備">
+    </div>
+    <div class="form-group">
+      <label>説明</label>
+      <textarea id="taskDesc" placeholder="タスクの詳細を入力"></textarea>
+    </div>
+    <div class="form-group">
+      <label>優先度</label>
+      <select id="taskPriority">
+        <option value="medium">中</option>
+        <option value="high">高</option>
+        <option value="low">低</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>期限</label>
+      <input type="date" id="taskDue">
+    </div>
+    <div class="form-group">
+      <label>やること（サブタスク）</label>
+      <div id="modalSubtasks"></div>
+      <div class="add-subtask-row">
+        <input type="text" id="modalSubtaskInput" placeholder="やることを入力してEnter">
+        <button class="btn btn-sm btn-outline" onclick="addModalSubtask()">追加</button>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeAddModal()">キャンセル</button>
+      <button class="btn btn-primary" onclick="saveTask()">保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const STORAGE_KEY = 'todo-manager-tasks';
+
+let tasks = [];
+let editingTaskId = null;
+let modalSubtasksList = [];
+
+// 初期化
+function init() {
+  const saved = localStorage.getItem(STORAGE_KEY);
+  if (saved) {
+    try { tasks = JSON.parse(saved); } catch(e) { tasks = []; }
+  }
+  render();
+
+  document.getElementById('searchInput').addEventListener('input', render);
+  document.getElementById('filterStatus').addEventListener('change', render);
+  document.getElementById('filterPriority').addEventListener('change', render);
+  document.getElementById('modalSubtaskInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); addModalSubtask(); }
+  });
+  // Escでモーダル閉じる
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeAddModal();
+  });
+}
+
+function save() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+}
+
+function generateId() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+}
+
+function formatDate(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  return `${d.getFullYear()}/${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getDate().toString().padStart(2,'0')}`;
+}
+
+function getDueStatus(dateStr) {
+  if (!dateStr) return '';
+  const now = new Date();
+  now.setHours(0,0,0,0);
+  const due = new Date(dateStr);
+  due.setHours(0,0,0,0);
+  const diff = (due - now) / (1000*60*60*24);
+  if (diff < 0) return 'overdue';
+  if (diff <= 3) return 'soon';
+  return '';
+}
+
+function calcProgress(task) {
+  if (!task.subtasks || task.subtasks.length === 0) return task.completed ? 100 : 0;
+  const done = task.subtasks.filter(s => s.done).length;
+  return Math.round((done / task.subtasks.length) * 100);
+}
+
+// 統計表示
+function updateStats() {
+  const total = tasks.length;
+  const completed = tasks.filter(t => t.completed).length;
+  const active = total - completed;
+  const overdue = tasks.filter(t => !t.completed && getDueStatus(t.due) === 'overdue').length;
+  let html = `<span>全体: <span class="count">${total}</span></span>`;
+  html += `<span>進行中: <span class="count">${active}</span></span>`;
+  html += `<span>完了: <span class="count">${completed}</span></span>`;
+  if (overdue > 0) html += `<span style="color:var(--danger)">期限超過: <span class="count">${overdue}</span></span>`;
+  document.getElementById('headerStats').innerHTML = html;
+}
+
+// フィルタ＆検索
+function getFilteredTasks() {
+  const search = document.getElementById('searchInput').value.toLowerCase();
+  const status = document.getElementById('filterStatus').value;
+  const priority = document.getElementById('filterPriority').value;
+
+  return tasks.filter(t => {
+    if (status === 'active' && t.completed) return false;
+    if (status === 'completed' && !t.completed) return false;
+    if (priority !== 'all' && t.priority !== priority) return false;
+    if (search) {
+      const inTitle = t.name.toLowerCase().includes(search);
+      const inDesc = (t.description || '').toLowerCase().includes(search);
+      const inSub = (t.subtasks || []).some(s => s.text.toLowerCase().includes(search));
+      if (!inTitle && !inDesc && !inSub) return false;
+    }
+    return true;
+  });
+}
+
+// レンダリング
+function render() {
+  updateStats();
+  const filtered = getFilteredTasks();
+  const container = document.getElementById('taskList');
+
+  if (filtered.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <div class="icon">📋</div>
+        <p>${tasks.length === 0 ? '「＋ 新規タスク」からタスクを追加しましょう' : '条件に一致するタスクがありません'}</p>
+      </div>`;
+    return;
+  }
+
+  // ソート: 未完了→完了、優先度高→低
+  const priorityOrder = { high: 0, medium: 1, low: 2 };
+  filtered.sort((a, b) => {
+    if (a.completed !== b.completed) return a.completed ? 1 : -1;
+    return (priorityOrder[a.priority] || 1) - (priorityOrder[b.priority] || 1);
+  });
+
+  container.innerHTML = filtered.map(t => renderTask(t)).join('');
+}
+
+function renderTask(task) {
+  const progress = calcProgress(task);
+  const progressClass = progress >= 80 ? 'high' : progress >= 40 ? 'mid' : '';
+  const priorityLabel = { high: '高', medium: '中', low: '低' };
+  const dueStatus = getDueStatus(task.due);
+  const dueLabel = dueStatus === 'overdue' ? '期限超過' : dueStatus === 'soon' ? 'まもなく期限' : '';
+
+  let subtasksHtml = '';
+  if (task.subtasks && task.subtasks.length > 0) {
+    subtasksHtml = `<div class="subtasks">` +
+      task.subtasks.map((s, i) => `
+        <div class="subtask-item ${s.done ? 'done' : ''}">
+          <input type="checkbox" ${s.done ? 'checked' : ''} onchange="toggleSubtask('${task.id}', ${i})">
+          <span class="subtask-text">${escHtml(s.text)}</span>
+          <button class="subtask-delete" onclick="deleteSubtask('${task.id}', ${i})" title="削除">×</button>
+        </div>
+      `).join('') +
+      `<div class="add-subtask-row">
+        <input type="text" placeholder="やることを追加..." onkeydown="if(event.key==='Enter'){event.preventDefault();addSubtask('${task.id}',this)}">
+        <button class="btn btn-sm btn-outline" onclick="addSubtask('${task.id}',this.previousElementSibling)">追加</button>
+      </div>` +
+      `</div>`;
+  } else {
+    subtasksHtml = `<div class="subtasks">
+      <div class="add-subtask-row">
+        <input type="text" placeholder="やることを追加..." onkeydown="if(event.key==='Enter'){event.preventDefault();addSubtask('${task.id}',this)}">
+        <button class="btn btn-sm btn-outline" onclick="addSubtask('${task.id}',this.previousElementSibling)">追加</button>
+      </div>
+    </div>`;
+  }
+
+  // 進捗メモ
+  let notesHtml = '';
+  if (task.notes && task.notes.length > 0) {
+    notesHtml = `<div class="progress-notes"><h4>進捗メモ</h4>` +
+      task.notes.map((n, i) => `
+        <div class="note-item">
+          <div class="note-content">${escHtml(n.text)}</div>
+          <div class="note-date">${formatDate(n.date)}</div>
+          <button class="note-delete" onclick="deleteNote('${task.id}', ${i})" title="削除">×</button>
+        </div>
+      `).join('') +
+      `</div>`;
+  }
+  notesHtml += `<div class="add-note-row">
+    <input type="text" placeholder="進捗メモを追加..." onkeydown="if(event.key==='Enter'){event.preventDefault();addNote('${task.id}',this)}">
+    <button class="btn btn-sm btn-outline" onclick="addNote('${task.id}',this.previousElementSibling)">メモ追加</button>
+  </div>`;
+
+  return `
+    <div class="task-card ${task.completed ? 'completed' : ''}" id="task-${task.id}">
+      <div class="task-header">
+        <div class="task-title-area">
+          <div>
+            <span class="priority-badge priority-${task.priority}">${priorityLabel[task.priority]}</span>
+            <span class="task-title" onclick="toggleExpand('${task.id}')">${escHtml(task.name)}</span>
+            ${task.due ? `<span class="due-date ${dueStatus}">${formatDate(task.due)} ${dueLabel ? '(' + dueLabel + ')' : ''}</span>` : ''}
+          </div>
+          ${task.description ? `<div class="task-meta">${escHtml(task.description)}</div>` : ''}
+        </div>
+        <div class="task-actions">
+          <button class="btn btn-sm btn-outline" onclick="toggleComplete('${task.id}')">${task.completed ? '戻す' : '完了'}</button>
+          <button class="btn btn-sm btn-outline" onclick="openEditModal('${task.id}')">編集</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteTask('${task.id}')">削除</button>
+        </div>
+      </div>
+      <div class="progress-section">
+        <div class="progress-bar-bg">
+          <div class="progress-bar-fill ${progressClass}" style="width:${progress}%"></div>
+        </div>
+        <div class="progress-text">${progress}% 完了${task.subtasks && task.subtasks.length > 0 ? ` (${task.subtasks.filter(s=>s.done).length}/${task.subtasks.length})` : ''}</div>
+      </div>
+      ${subtasksHtml}
+      ${notesHtml}
+    </div>`;
+}
+
+function escHtml(str) {
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+// モーダル操作
+function openAddModal() {
+  editingTaskId = null;
+  document.getElementById('modalTitle').textContent = '新規タスク';
+  document.getElementById('taskName').value = '';
+  document.getElementById('taskDesc').value = '';
+  document.getElementById('taskPriority').value = 'medium';
+  document.getElementById('taskDue').value = '';
+  modalSubtasksList = [];
+  renderModalSubtasks();
+  document.getElementById('addModal').classList.add('active');
+  document.getElementById('taskName').focus();
+}
+
+function openEditModal(id) {
+  const task = tasks.find(t => t.id === id);
+  if (!task) return;
+  editingTaskId = id;
+  document.getElementById('modalTitle').textContent = 'タスクを編集';
+  document.getElementById('taskName').value = task.name;
+  document.getElementById('taskDesc').value = task.description || '';
+  document.getElementById('taskPriority').value = task.priority;
+  document.getElementById('taskDue').value = task.due || '';
+  modalSubtasksList = (task.subtasks || []).map(s => ({...s}));
+  renderModalSubtasks();
+  document.getElementById('addModal').classList.add('active');
+  document.getElementById('taskName').focus();
+}
+
+function closeAddModal() {
+  document.getElementById('addModal').classList.remove('active');
+  editingTaskId = null;
+}
+
+function renderModalSubtasks() {
+  const container = document.getElementById('modalSubtasks');
+  container.innerHTML = modalSubtasksList.map((s, i) => `
+    <div class="subtask-item">
+      <input type="checkbox" ${s.done ? 'checked' : ''} onchange="modalSubtasksList[${i}].done=this.checked">
+      <span class="subtask-text">${escHtml(s.text)}</span>
+      <button class="subtask-delete" onclick="modalSubtasksList.splice(${i},1);renderModalSubtasks()">×</button>
+    </div>
+  `).join('');
+}
+
+function addModalSubtask() {
+  const input = document.getElementById('modalSubtaskInput');
+  const text = input.value.trim();
+  if (!text) return;
+  modalSubtasksList.push({ text, done: false });
+  input.value = '';
+  renderModalSubtasks();
+  input.focus();
+}
+
+function saveTask() {
+  const name = document.getElementById('taskName').value.trim();
+  if (!name) { alert('タスク名を入力してください'); return; }
+
+  const data = {
+    name,
+    description: document.getElementById('taskDesc').value.trim(),
+    priority: document.getElementById('taskPriority').value,
+    due: document.getElementById('taskDue').value,
+    subtasks: modalSubtasksList,
+  };
+
+  if (editingTaskId) {
+    const idx = tasks.findIndex(t => t.id === editingTaskId);
+    if (idx >= 0) {
+      tasks[idx] = { ...tasks[idx], ...data };
+    }
+  } else {
+    tasks.push({
+      id: generateId(),
+      ...data,
+      completed: false,
+      notes: [],
+      createdAt: new Date().toISOString(),
+    });
+  }
+
+  save();
+  closeAddModal();
+  render();
+}
+
+// タスク操作
+function toggleComplete(id) {
+  const task = tasks.find(t => t.id === id);
+  if (!task) return;
+  task.completed = !task.completed;
+  if (task.completed && task.subtasks) {
+    task.subtasks.forEach(s => s.done = true);
+  }
+  save();
+  render();
+}
+
+function deleteTask(id) {
+  if (!confirm('このタスクを削除しますか？')) return;
+  tasks = tasks.filter(t => t.id !== id);
+  save();
+  render();
+}
+
+// サブタスク操作
+function toggleSubtask(taskId, subIdx) {
+  const task = tasks.find(t => t.id === taskId);
+  if (!task || !task.subtasks[subIdx]) return;
+  task.subtasks[subIdx].done = !task.subtasks[subIdx].done;
+  // 全サブタスク完了でタスクも完了に
+  if (task.subtasks.every(s => s.done)) {
+    task.completed = true;
+  } else {
+    task.completed = false;
+  }
+  save();
+  render();
+}
+
+function addSubtask(taskId, inputEl) {
+  const text = inputEl.value.trim();
+  if (!text) return;
+  const task = tasks.find(t => t.id === taskId);
+  if (!task) return;
+  if (!task.subtasks) task.subtasks = [];
+  task.subtasks.push({ text, done: false });
+  task.completed = false;
+  inputEl.value = '';
+  save();
+  render();
+}
+
+function deleteSubtask(taskId, subIdx) {
+  const task = tasks.find(t => t.id === taskId);
+  if (!task || !task.subtasks) return;
+  task.subtasks.splice(subIdx, 1);
+  save();
+  render();
+}
+
+// 進捗メモ
+function addNote(taskId, inputEl) {
+  const text = inputEl.value.trim();
+  if (!text) return;
+  const task = tasks.find(t => t.id === taskId);
+  if (!task) return;
+  if (!task.notes) task.notes = [];
+  task.notes.unshift({ text, date: new Date().toISOString() });
+  inputEl.value = '';
+  save();
+  render();
+}
+
+function deleteNote(taskId, noteIdx) {
+  const task = tasks.find(t => t.id === taskId);
+  if (!task || !task.notes) return;
+  task.notes.splice(noteIdx, 1);
+  save();
+  render();
+}
+
+// 起動
+init();
+</script>
+</body>
+</html>
